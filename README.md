@@ -1,4 +1,4 @@
-# Argon ONE fan control daemon
+# Argon ONE utils
 
 A port of the logic of the [Argon ONE fan control daemon script](https://download.argon40.com/argon1.sh) to Go instead of Python.
 
@@ -6,69 +6,51 @@ A port of the logic of the [Argon ONE fan control daemon script](https://downloa
 
 ## I'm using NixOS! How do I set it up?
 
-The Argon ONE's fan is controlled using I2C. On Raspbian, enabling I2C is a simple matter of using `raspi-config`, which will add a line similar to `dtparam=i2c_arm=on` to `/boot/config.txt`, and rebooting. This doesn't work for me on NixOS even using the Pi's kernel, so I had to work on a device tree overlay to enable it instead. It looks like [the file below](#i2c-nix). Include that in your `configuration.nix` as follows:
+There's no warranty of any kind for this.
+
+The Argon ONE's fan is controlled using I2C. On Raspbian, enabling I2C is a simple matter of using `raspi-config`, which will add a line similar to `dtparam=i2c_arm=on` to `/boot/config.txt`, and rebooting. This doesn't work for me on NixOS even using the Pi's kernel, so I had to work on a device tree overlay to enable it instead. For some reason I think the i2c bus names under NixOS are swapped, so this code works with i2c-1 whereas on Raspbian I believe it would be i2c-0 (I have not tested this).
+
+The overlay looks like [nix/hardware/i2c.nix](nix/hardware/i2c.nix). Copy that somewhere under `/etc/nixos` and include that in your `configuration.nix` as follows:
 
 ```nix
 imports =
 [
     ./hardware-configuration.nix
-    ./i2c.nix
+    ./hardware/i2c.nix
 ];
 
-// Other settings
+# Other settings go here...
 
 hardware.raspberry-pi."4".i2c.enable = true;
 ```
 
-(This uses the convention of the [nixos-hardware overlay](https://github.com/NixOS/nixos-hardware/), to which I will eventually PR the overlay).
+(This option name uses the convention of the [nixos-hardware overlay](https://github.com/NixOS/nixos-hardware/), to which I will eventually PR this).
+
+Then to configure the service:
+
+```nix
+# Import the overlay to provide the argonone-utils package
+nixpkgs.overlays = [ (import ./overlays) ];
+
+systemd.services.argonone-fancontrold = {
+    enable = true;
+    wantedBy = [ "default.target" ];
+
+    serviceConfig = {
+        DynamicUser = true;
+        Group = "i2c";
+
+        ExecStart = "${pkgs.argonone-utils}/bin/argonone-fancontrold";
+    };
+};
+```
 
 In `hardware-configuration.nix`, I made the following additions:
 
 ```nix
 boot.initrd.kernelModules = [  "i2c-dev" "i2c-bcm2835"  ];
 boot.kernelModules = [ "i2c-dev" "i2c-bcm2835" ];
+hardware.i2c.enable = true; # This adds the i2c group
 ```
 
-# i2c.nix
-
-```nix
-# /etc/nixos/i2c.nix
-{ config, lib, pkgs, ... }:
-
-let cfg = config.hardware.raspberry-pi."4".i2c;
-in {
-    options.hardware = {
-        raspberry-pi."4".i2c = {
-            enable = lib.mkEnableOption ''
-                Enable the Raspberry Pi 4 hardware i2c controller.
-                '';
-        };
-    };
-
-    config = lib.mkIf cfg.enable {
-        hardware.deviceTree = {
-            overlays = [
-            {
-                name = "i2c0";
-                dtsText = ''
-
-	            /dts-v1/;
-                /plugin/;
-
-                /{
-                    compatible = "raspberrypi,4-model-b";
-
-                    fragment@1 {
-                        target = <&i2c1>;
-                        __overlay__ {
-                            status = "okay";
-                        };
-                    };
-                };
-                '';
-            }
-            ];
-        };
-    };
-}
-```
+Hopefully that should be it!

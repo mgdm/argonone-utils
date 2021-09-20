@@ -1,4 +1,4 @@
-module github.com/mgdm/argonone-fancontrold
+module github.com/mgdm/argonone-utils
 
 go 1.16
 
