@@ -4,7 +4,7 @@ A port of the logic of the [Argon ONE fan control daemon script](https://downloa
 
 **This probably won't work for you**. I use this on my [Raspberry Pi 4B running NixOS](https://mgdm.net/weblog/nixos-on-raspberry-pi-4/). Everything is hard coded to work on that machine with no accounting for other OSes or configurations.
 
-## I'm using NixOS! How do I set it up?
+## I'm using NixOS! How do I set up the fan control daemon?
 
 There's no warranty of any kind for this.
 
@@ -54,3 +54,16 @@ hardware.i2c.enable = true; # This adds the i2c group
 ```
 
 Hopefully that should be it!
+
+## I'm using NixOS! How do I make the power button work?
+
+Most of the functionality for making the power button turn the machine off already exists in the kernel and systemd. There's no need for a script to monitor the GPIOs unless you want to do something different like a quick press for reboot or a long press for shut down. The supplied Argon ONE script monitors the GPIO at 100Hz in order to do this. 
+
+I thought about rewriting this like I did with the fan control, but using interrupts, but then I got told by @adventureloop about the `gpio-keys` kernel module. This needs some device tree overlays to set up on NixOS (again, it's probably simpler on Raspbian), but once the overlay is applied systemd will respond to a double tap on the power button by shutting down. This is only the first step--it doesn't turn off the board. However, with a quick systemd one-shot unit, we can poke the right i2c command at the board to make it cut the power just after everything else is shut down.
+
+To use it:
+* include [power-button.nix](nix/hardware/power-button.nix) in your configuration
+* add `gpio-keys` to boot.kernelModules (I will add this to power-button.nix eventually)
+* enable it using `hardware.argon-one.power-button.enable = true;`
+
+After a rebuild, a double tap the power button should cleanly shut down and turn the machine off.
