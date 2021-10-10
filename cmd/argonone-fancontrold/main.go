@@ -80,10 +80,8 @@ func monitor(device *i2c.Dev) {
 	temp, err := getTemperature()
 	check(err)
 
-	fmt.Printf("Current temperature: %d\n", temp)
-
 	fanSpeed := selectFanSpeed(temp)
-	fmt.Printf("Target fan speed: %d\n", fanSpeed)
+	fmt.Printf("Current temperature: %d; Target fan speed: %d\n", temp, fanSpeed)
 
 	setFanSpeed(device, fanSpeed)
 	check(err)
